@@ -13,6 +13,7 @@
 #include "mapnik_vector_tile.hpp"
 #include "vector_tile_projection.hpp"
 #include "vector_tile_datasource.hpp"
+#include "vector_tile_datasource_pbf.hpp"
 #include "vector_tile_util.hpp"
 #include "vector_tile.pb.h"
 #include "object_to_container.hpp"
@@ -509,42 +510,36 @@ void _composite(VectorTile* target_vt,
                 std::size_t bytes = vt->buffer_.size();
                 if (bytes > 1) // throw instead?
                 {
-                    vector_tile::Tile new_tiledata2;
-                    if (new_tiledata2.ParseFromArray(vt->buffer_.data(), bytes))
-                    {
-                        unsigned num_layers = new_tiledata2.layers_size();
-                        if (num_layers > 0)
-                        {
-                            for (int i=0; i < new_tiledata2.layers_size(); ++i)
-                            {
-                                vector_tile::Tile_Layer const& layer = new_tiledata2.layers(i);
-                                mapnik::layer lyr(layer.name(),merc_srs);
-                                std::shared_ptr<mapnik::vector_tile_impl::tile_datasource> ds = std::make_shared<
-                                                                mapnik::vector_tile_impl::tile_datasource>(
-                                                                    layer,
-                                                                    vt->x_,
-                                                                    vt->y_,
-                                                                    vt->z_,
-                                                                    vt->width()
-                                                                    );
-                                ds->set_envelope(m_req.get_buffered_extent());
-                                lyr.set_datasource(ds);
-                                map.add_layer(lyr);
-                            }
-                            renderer_type ren(backend,
-                                              map,
-                                              m_req,
-                                              scale_factor,
-                                              offset_x,
-                                              offset_y,
-                                              area_threshold);
-                            ren.apply(scale_denominator);
+                    mapbox::util::pbf message(vt->buffer_.data(),bytes);
+                    while (message.next()) {
+                        if (message.tag() == 3) {
+                            mapbox::util::pbf layermsg = message.get_message();
+                            auto ds = std::make_shared<mapnik::vector_tile_impl::tile_datasource_pbf>(
+                                        layermsg,
+                                        vt->x_,
+                                        vt->y_,
+                                        vt->z_,
+                                        vt->width()
+                                        );
+                            mapnik::layer lyr(ds->get_name(),merc_srs);
+                            ds->set_envelope(m_req.get_buffered_extent());
+                            lyr.set_datasource(ds);
+                            map.add_layer(lyr);
+                        } else {
+                            message.skip();
                         }
                     }
-                    else
-                    {
-                        // throw here?
-                    }
+                }
+                if (!map.layers().empty())
+                {
+                    renderer_type ren(backend,
+                                      map,
+                                      m_req,
+                                      scale_factor,
+                                      offset_x,
+                                      offset_y,
+                                      area_threshold);
+                    ren.apply(scale_denominator);
                 }
             }
             std::string new_message;
