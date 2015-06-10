@@ -29,6 +29,22 @@
 
 Persistent<FunctionTemplate> Image::constructor;
 
+/**
+ * @name mapnik.Image
+ * @class
+ * @param {number} width
+ * @param {number} height
+ * @param {string} type a valid image type constant, usually taken from
+ * `mapnik.imageType`
+ * @param {Object} options valid options are `premultiplied`, `painted`,
+ * and `initialize`.
+ * @throws {TypeError} if any argument is the wrong type, like if width
+ * or height is not numeric.
+ * @example
+ * var im = new mapnik.Image(256, 256, mapnik.imageType.gray8, {
+ *   premultiplied: true
+ * });
+ */
 void Image::Initialize(Handle<Object> target) {
 
     NanScope();
@@ -154,16 +170,16 @@ NAN_METHOD(Image::New)
             if (args[3]->IsObject())
             {
                 Local<Object> options = Local<Object>::Cast(args[3]);
-                if (options->Has(NanNew("intialize")))
+                if (options->Has(NanNew("initialize")))
                 {
-                    Local<Value> init_val = options->Get(NanNew("intialize"));
+                    Local<Value> init_val = options->Get(NanNew("initialize"));
                     if (!init_val.IsEmpty() && init_val->IsBoolean())
                     {
                         initialize = init_val->BooleanValue();
                     }
                     else
                     {
-                        NanThrowTypeError("intialize option must be a boolean");
+                        NanThrowTypeError("initialize option must be a boolean");
                         NanReturnUndefined();
                     }
                 }
@@ -319,6 +335,24 @@ struct visitor_get_pixel
         
 };
 
+/**
+ * @name getPixel
+ * @instance
+ * @memberof mapnik.Image
+ * @param {number} x position within image from top left
+ * @param {number} y position within image from top left
+ * @param {Object} options the only valid option is `get_color`, which
+ * should be a `boolean`.
+ * @returns {number} color
+ * @example
+ * var im = new mapnik.Image(256, 256);
+ * var view = im.view(0, 0, 256, 256);
+ * var pixel = view.getPixel(0, 0, {get_color:true});
+ * assert.equal(pixel.r, 0);
+ * assert.equal(pixel.g, 0);
+ * assert.equal(pixel.b, 0);
+ * assert.equal(pixel.a, 0);
+ */
 NAN_METHOD(Image::getPixel)
 {
     NanScope();
@@ -376,6 +410,14 @@ NAN_METHOD(Image::getPixel)
     NanReturnUndefined();
 }
 
+/**
+ * @name setPixel
+ * @instance
+ * @memberof mapnik.Image
+ * @param {number} x position within image from top left
+ * @param {number} y position within image from top left
+ * @param {Object|number} numeric or object representation of a color
+ */
 NAN_METHOD(Image::setPixel)
 {
     NanScope();
@@ -426,6 +468,17 @@ NAN_METHOD(Image::setPixel)
     NanReturnUndefined();
 }
 
+/**
+ * Compare two images visually. This is useful for algorithms and tests that
+ * confirm whether a certain image has changed significantly.
+ *
+ * @name compare
+ * @instance
+ * @memberof mapnik.Image
+ * @param {mapnik.Image} other another image instance
+ * @param {Object} [options={threshold:16,alpha:true}]
+ * @returns {number} quantified visual difference between these two images
+ */
 NAN_METHOD(Image::compare)
 {
     NanScope();
@@ -488,6 +541,14 @@ NAN_METHOD(Image::fillSync)
     NanReturnValue(_fillSync(args));
 }
 
+/**
+ * Fill this image with a given color
+ *
+ * @name fillSync
+ * @instance
+ * @memberof mapnik.Image
+ * @param {mapnik.Color|number} color
+ */
 Local<Value> Image::_fillSync(_NAN_METHOD_ARGS) {
     NanEscapableScope();
     if (args.Length() < 1 ) {
@@ -559,6 +620,21 @@ typedef struct {
     Persistent<Function> cb;
 } fill_image_baton_t;
 
+/**
+ * Asynchronously fill this image with a given color.
+ *
+ * @name fill
+ * @instance
+ * @memberof mapnik.Image
+ * @param {mapnik.Color|number} color
+ * @param {Function} callback
+ * @example
+ * var im = new mapnik.Image(5, 5);
+ * im.fill(1, function(err, im_res) {
+ *   if (err) throw err;
+ *   assert.equal(im_res.getPixel(0, 0), 1);
+ * });
+ */
 NAN_METHOD(Image::fill)
 {
     NanScope();
@@ -671,7 +747,19 @@ void Image::EIO_AfterFill(uv_work_t* req)
     delete closure;
 }
 
-
+/**
+ * Make this image transparent.
+ *
+ * @name clearSync
+ * @instance
+ * @memberof mapnik.Image
+ * @example
+ * var im = new mapnik.Image(5,5);
+ * im.fillSync(1);
+ * assert.equal(im.getPixel(0, 0), 1);
+ * im.clearSync();
+ * assert.equal(im.getPixel(0, 0), 0);
+ */
 NAN_METHOD(Image::clearSync)
 {
     NanScope();
@@ -701,6 +789,14 @@ typedef struct {
     Persistent<Function> cb;
 } clear_image_baton_t;
 
+/**
+ * Make this image transparent, removing all image data from it.
+ *
+ * @name clear
+ * @instance
+ * @param {Function} callback
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::clear)
 {
     NanScope();
@@ -791,6 +887,14 @@ typedef struct {
     Persistent<Function> cb;
 } image_op_baton_t;
 
+/**
+ * Determine whether the given image is premultiplied.
+ *
+ * @name premultiplied
+ * @instance
+ * @returns {boolean} premultiplied true if the image is premultiplied
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::premultiplied)
 {
     NanScope();
@@ -799,6 +903,13 @@ NAN_METHOD(Image::premultiplied)
     NanReturnValue(NanNew<Boolean>(premultiplied));
 }
 
+/**
+ * Premultiply the pixels in this image
+ *
+ * @name premultiplySync
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::premultiplySync)
 {
     NanScope();
@@ -812,6 +923,14 @@ Local<Value> Image::_premultiplySync(_NAN_METHOD_ARGS) {
     return NanEscapeScope(NanUndefined());
 }
 
+/**
+ * Premultiply the pixels in this image, asynchronously
+ *
+ * @name premultiply
+ * @param {Function} callback
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::premultiply)
 {
     NanScope();
@@ -853,6 +972,14 @@ void Image::EIO_AfterMultiply(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Demultiply the pixels in this image. The opposite of
+ * premultiplying
+ *
+ * @name demultiplySync
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::demultiplySync)
 {
     NanScope();
@@ -866,6 +993,15 @@ Local<Value> Image::_demultiplySync(_NAN_METHOD_ARGS) {
     return NanEscapeScope(NanUndefined());
 }
 
+/**
+ * Demultiply the pixels in this image, asynchronously. The opposite of
+ * premultiplying
+ *
+ * @name demultiply
+ * @param {Function} callback
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::demultiply)
 {
     NanScope();
@@ -974,7 +1110,19 @@ void Image::EIO_AfterIsSolid(uv_work_t* req)
     delete closure;
 }
 
-
+/**
+ * Determine whether the image is solid - whether it has alpha values of greater
+ * than one.
+ *
+ * @name isSolidSync
+ * @returns {boolean} whether the image is solid
+ * @instance
+ * @memberof mapnik.Image
+ * @example
+ * var im = new mapnik.Image(256, 256);
+ * var view = im.view(0, 0, 256, 256);
+ * assert.equal(view.isSolidSync(), true);
+ */
 NAN_METHOD(Image::isSolidSync)
 {
     NanScope();
@@ -1005,6 +1153,15 @@ typedef struct {
     std::string error_name;
 } copy_image_baton_t;
 
+/**
+ * Copy this image data so that changes can be made to a clone of it.
+ *
+ * @name copy
+ * @param {Object} [options={}]
+ * @param {Function} callback
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::copy)
 {
     NanScope();
@@ -1111,11 +1268,11 @@ void Image::EIO_Copy(uv_work_t* req)
     try
     {
         closure->im2 = std::make_shared<mapnik::image_any>(
-                               std::move(mapnik::image_copy(*(closure->im1->this_), 
-                                                            closure->type, 
-                                                            closure->offset, 
+                               mapnik::image_copy(*(closure->im1->this_),
+                                                            closure->type,
+                                                            closure->offset,
                                                             closure->scaling)
-                               ));
+                               );
     }
     catch (std::exception const& ex)
     {
@@ -1151,7 +1308,15 @@ void Image::EIO_AfterCopy(uv_work_t* req)
     delete closure;
 }
 
-
+/**
+ * Copy this image data so that changes can be made to a clone of it.
+ *
+ * @name copySync
+ * @param {Object} [options={}]
+ * @returns {mapnik.Image} copy
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::copySync)
 {
     NanScope();
@@ -1240,11 +1405,11 @@ Local<Value> Image::_copySync(_NAN_METHOD_ARGS)
     try
     {
         std::shared_ptr<mapnik::image_any> image_ptr = std::make_shared<mapnik::image_any>(
-                                               std::move(mapnik::image_copy(*(im->this_), 
-                                                                            type, 
-                                                                            offset, 
+                                               mapnik::image_copy(*(im->this_),
+                                                                            type,
+                                                                            offset,
                                                                             scaling)
-                                               ));
+                                               );
         Image* im = new Image(image_ptr);
         Handle<Value> ext = NanNew<External>(im);
         Handle<Object> obj = NanNew(constructor)->GetFunction()->NewInstance(1, &ext);
@@ -1265,6 +1430,14 @@ NAN_METHOD(Image::painted)
     NanReturnValue(NanNew<Boolean>(im->this_->painted()));
 }
 
+/**
+ * Get this image's width
+ *
+ * @name width
+ * @returns {number} width
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::width)
 {
     NanScope();
@@ -1273,6 +1446,14 @@ NAN_METHOD(Image::width)
     NanReturnValue(NanNew<Int32>(static_cast<std::int32_t>(im->this_->width())));
 }
 
+/**
+ * Get this image's height
+ *
+ * @name height
+ * @returns {number} height
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::height)
 {
     NanScope();
@@ -1486,6 +1667,15 @@ Local<Value> Image::_fromBytesSync(_NAN_METHOD_ARGS)
     }
 }
 
+/**
+ * Create a new image from a buffer
+ *
+ * @name fromBytes
+ * @param {Buffer} buffer
+ * @param {Function} callback
+ * @static
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::fromBytes)
 {
     NanScope();
@@ -1579,6 +1769,18 @@ void Image::EIO_AfterFromBytes(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Encode this image into a buffer of encoded data
+ *
+ * @name encodeSync
+ * @param {string} [format=png] image format
+ * @returns {Buffer} encoded image data
+ * @instance
+ * @memberof mapnik.Image
+ * @example
+ * var fs = require('fs');
+ * fs.writeFileSync('myimage.png', myImage.encodeSync('png'));
+ */
 NAN_METHOD(Image::encodeSync)
 {
     NanScope();
@@ -1652,6 +1854,21 @@ typedef struct {
     std::string result;
 } encode_image_baton_t;
 
+/**
+ * Encode this image into a buffer of encoded data
+ *
+ * @name encode
+ * @param {string} [format=png] image format
+ * @param {Function} callback
+ * @returns {Buffer} encoded image data
+ * @instance
+ * @memberof mapnik.Image
+ * @example
+ * var fs = require('fs');
+ * myImage.encode('png', function(err, encoded) {
+ *   fs.writeFileSync('myimage.png', encoded);
+ * });
+ */
 NAN_METHOD(Image::encode)
 {
     NanScope();
@@ -1759,6 +1976,17 @@ void Image::EIO_AfterEncode(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Get a constrained view of this image given x, y, width, height parameters.
+ * @memberof mapnik.Image
+ * @instance
+ * @name view
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ * @returns {mapnik.Image} an image constrained to this new view
+ */
 NAN_METHOD(Image::view)
 {
     NanScope();
@@ -1778,6 +2006,17 @@ NAN_METHOD(Image::view)
     NanReturnValue(ImageView::NewInstance(im,x,y,w,h));
 }
 
+/**
+ * Encode this image and save it to disk as a file.
+ *
+ * @name save
+ * @param {string} filename
+ * @param {string} [format=png]
+ * @instance
+ * @memberof mapnik.Image
+ * @example
+ * myImage.save('foo.png');
+ */
 NAN_METHOD(Image::save)
 {
     NanScope();
@@ -1836,6 +2075,16 @@ typedef struct {
     Persistent<Function> cb;
 } composite_image_baton_t;
 
+/**
+ * Overlay this image with another image, creating a layered composite as
+ * a new image
+ *
+ * @name composite
+ * @param {mapnik.Image} other
+ * @param {Function} callback
+ * @instance
+ * @memberof mapnik.Image
+ */
 NAN_METHOD(Image::composite)
 {
     NanScope();

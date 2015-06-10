@@ -1,7 +1,9 @@
 #include "utils.hpp"
 #include "mapnik_map.hpp"
 #include "mapnik_image.hpp"
+#if defined(GRID_RENDERER)
 #include "mapnik_grid.hpp"
+#endif
 #include "mapnik_feature.hpp"
 #include "mapnik_cairo_surface.hpp"
 #ifdef SVG_RENDERER
@@ -25,8 +27,10 @@
 #include <mapnik/projection.hpp>
 #include <mapnik/featureset.hpp>
 #include <mapnik/agg_renderer.hpp>      // for agg_renderer
+#if defined(GRID_RENDERER)
 #include <mapnik/grid/grid.hpp>         // for hit_grid, grid
 #include <mapnik/grid/grid_renderer.hpp>  // for grid_renderer
+#endif
 #include <mapnik/box2d.hpp>
 #include <mapnik/scale_denominator.hpp>
 #include <mapnik/util/geometry_to_geojson.hpp>
@@ -46,7 +50,8 @@
 #include <string>                       // for string, char_traits, etc
 #include <exception>                    // for exception
 #include <vector>                       // for vector
-#include "pbf.hpp"
+#include "pbf_common.hpp"
+#include "pbf_reader.hpp"
 
 // addGeoJSON
 #include "vector_tile_processor.hpp"
@@ -180,6 +185,18 @@ double path_to_point_distance(mapnik::geometry::geometry<double> const& geom, do
 
 Persistent<FunctionTemplate> VectorTile::constructor;
 
+/**
+ * A generator for the [Mapbox Vector Tile](https://www.mapbox.com/developers/vector-tiles/)
+ * specification of compressed and simplified tiled vector data
+ *
+ * @name mapnik.VectorTile
+ * @class
+ * @param {number} z
+ * @param {number} x
+ * @param {number} y
+ * @example
+ * var vtile = new mapnik.VectorTile(9,112,195);
+ */
 void VectorTile::Initialize(Handle<Object> target) {
     NanScope();
 
@@ -308,19 +325,17 @@ std::vector<std::string> VectorTile::lazy_names()
     std::size_t bytes = buffer_.size();
     if (bytes > 0)
     {
-        pbf::message item(buffer_.data(),bytes);
+        mapbox::util::pbf item(buffer_.data(),bytes);
         while (item.next()) {
-            if (item.tag == 3) {
-                uint64_t len = item.varint();
-                pbf::message layermsg(item.getData(),static_cast<std::size_t>(len));
+            if (item.tag() == 3) {
+                mapbox::util::pbf layermsg = item.get_message();
                 while (layermsg.next()) {
-                    if (layermsg.tag == 1) {
-                        names.emplace_back(layermsg.string());
+                    if (layermsg.tag() == 1) {
+                        names.emplace_back(layermsg.get_string());
                     } else {
                         layermsg.skip();
                     }
                 }
-                item.skipBytes(len);
             } else {
                 item.skip();
             }
@@ -555,6 +570,14 @@ void _composite(VectorTile* target_vt,
     }
 }
 
+/**
+ * Composite an array of vector tiles into one vector tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name compositeSync
+ * @instance
+ * @param {Array<mapnik.VectorTile>} vector tiles
+ */
 NAN_METHOD(VectorTile::compositeSync)
 {
     NanScope();
@@ -916,6 +939,15 @@ NAN_METHOD(VectorTile::toString)
 }
 #endif
 
+
+/**
+ * Get the names of all of the layers in this vector tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name names
+ * @instance
+ * @param {Array<string>} layer names
+ */
 NAN_METHOD(VectorTile::names)
 {
     NanScope();
@@ -957,20 +989,18 @@ bool VectorTile::lazy_empty()
     std::size_t bytes = buffer_.size();
     if (bytes > 0)
     {
-        pbf::message item(buffer_.data(),bytes);
+        mapbox::util::pbf item(buffer_.data(),bytes);
         while (item.next()) {
-            if (item.tag == 3) {
-                uint64_t len = item.varint();
-                pbf::message layermsg(item.getData(),static_cast<std::size_t>(len));
+            if (item.tag() == 3) {
+                mapbox::util::pbf layermsg = item.get_message();
                 while (layermsg.next()) {
-                    if (layermsg.tag == 2) {
+                    if (layermsg.tag() == 2) {
                         // we hit a feature, assume we've got data
                         return false;
                     } else {
                         layermsg.skip();
                     }
                 }
-                item.skipBytes(len);
             }
             else
             {
@@ -982,6 +1012,15 @@ bool VectorTile::lazy_empty()
 }
 
 
+/**
+ * Return whether this vector tile is empty - whether it has no
+ * layers and no features
+ *
+ * @memberof mapnik.VectorTile
+ * @name empty
+ * @instance
+ * @param {boolean} whether the layer is empty
+ */
 NAN_METHOD(VectorTile::empty)
 {
     NanScope();
@@ -1016,6 +1055,14 @@ NAN_METHOD(VectorTile::empty)
     NanReturnValue(NanNew<Boolean>(true));
 }
 
+/**
+ * Get the vector tile's width
+ *
+ * @memberof mapnik.VectorTile
+ * @name width
+ * @instance
+ * @param {number} width
+ */
 NAN_METHOD(VectorTile::width)
 {
     NanScope();
@@ -1023,6 +1070,14 @@ NAN_METHOD(VectorTile::width)
     NanReturnValue(NanNew<Integer>(d->width()));
 }
 
+/**
+ * Get the vector tile's height
+ *
+ * @memberof mapnik.VectorTile
+ * @name height
+ * @instance
+ * @param {number} height
+ */
 NAN_METHOD(VectorTile::height)
 {
     NanScope();
@@ -1030,6 +1085,14 @@ NAN_METHOD(VectorTile::height)
     NanReturnValue(NanNew<Integer>(d->height()));
 }
 
+/**
+ * Get whether the vector tile has been painted
+ *
+ * @memberof mapnik.VectorTile
+ * @name painted
+ * @instance
+ * @param {boolean} painted
+ */
 NAN_METHOD(VectorTile::painted)
 {
     NanScope();
@@ -1050,6 +1113,18 @@ typedef struct {
     Persistent<Function> cb;
 } vector_tile_query_baton_t;
 
+/**
+ * Query a vector tile by longitude and latitude
+ *
+ * @memberof mapnik.VectorTile
+ * @name query
+ * @instance
+ * @param {number} longitude
+ * @param {number} latitude
+ * @param {Object} [options={tolerance:0}] tolerance: allow results that
+ * are not exactly on this longitude, latitude position.
+ * @param {Function} callback
+ */
 NAN_METHOD(VectorTile::query)
 {
     NanScope();
@@ -1615,6 +1690,15 @@ void VectorTile::EIO_AfterQueryMany(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Get a JSON representation of this tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name toJSON
+ * @instance
+ * @returns {Object} json representation of this tile with name, extent,
+ * and version properties
+ */
 NAN_METHOD(VectorTile::toJSON)
 {
     NanScope();
@@ -1757,6 +1841,14 @@ static bool layer_to_geojson(vector_tile::Tile_Layer const& layer,
     return !first;
 }
 
+/**
+ * Get a [GeoJSON](http://geojson.org/) representation of this tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name toGeoJSONSync
+ * @instance
+ * @returns {string} stringified GeoJSON of all the features in this tile.
+ */
 NAN_METHOD(VectorTile::toGeoJSONSync)
 {
     NanScope();
@@ -1953,6 +2045,15 @@ struct to_geojson_baton {
     Persistent<Function> cb;
 };
 
+/**
+ * Get a [GeoJSON](http://geojson.org/) representation of this tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name toGeoJSON
+ * @instance
+ * @param {Function} callback
+ * @returns {string} stringified GeoJSON of all the features in this tile.
+ */
 NAN_METHOD(VectorTile::toGeoJSON)
 {
     NanScope();
@@ -2118,6 +2219,15 @@ void VectorTile::EIO_AfterParse(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Add features to this tile from a GeoJSON string
+ *
+ * @memberof mapnik.VectorTile
+ * @name addGeoJSON
+ * @instance
+ * @param {string} geojson as a string
+ * @param {string} name of the layer to be added
+ */
 NAN_METHOD(VectorTile::addGeoJSON)
 {
     NanScope();
@@ -2254,6 +2364,15 @@ NAN_METHOD(VectorTile::addImage)
     NanReturnUndefined();
 }
 
+/**
+ * Add raw data to this tile as a Buffer
+ *
+ * @memberof mapnik.VectorTile
+ * @name addData
+ * @instance
+ * @param {Buffer} raw data
+ * @param {string} name of the layer to be added
+ */
 NAN_METHOD(VectorTile::addData)
 {
     NanScope();
@@ -2321,6 +2440,16 @@ typedef struct {
     Persistent<Object> buffer;
 } vector_tile_setdata_baton_t;
 
+
+/**
+ * Replace the data in this vector tile with new raw data
+ *
+ * @memberof mapnik.VectorTile
+ * @name setData
+ * @instance
+ * @param {Buffer} raw data
+ * @param {string} name of the layer to be added
+ */
 NAN_METHOD(VectorTile::setData)
 {
     NanScope();
@@ -2449,14 +2578,19 @@ std::string VectorTile::_gzip_compress(const unsigned char * str, const int len,
     return outstring;
 }
 
-
+/**
+ * Get the data in this vector tile as a buffer
+ *
+ * @memberof mapnik.VectorTile
+ * @name getData
+ * @instance
+ * @returns {Buffer} raw data
+ */
 NAN_METHOD(VectorTile::getData)
 {
     NanScope();
     NanReturnValue(_getData(args));
 }
-
-
 
 Local<Value> VectorTile::_getData(_NAN_METHOD_ARGS)
 {
@@ -2603,19 +2737,17 @@ Local<Value> VectorTile::_getData(_NAN_METHOD_ARGS)
     return NanEscapeScope(NanUndefined());
 }
 
-using surface_type = mapnik::util::variant<Image *, CairoSurface *, Grid *>;
+using surface_type = mapnik::util::variant<Image *
+  , CairoSurface *
+#if defined(GRID_RENDERER)
+  , Grid *
+#endif
+  >;
 
 struct deref_visitor
 {
-    void operator() (Image * surface)
-    {
-        surface->_unref();
-    }
-    void operator() (CairoSurface * surface)
-    {
-        surface->_unref();
-    }
-    void operator() (Grid * surface)
+    template <typename SurfaceType>
+    void operator() (SurfaceType * surface)
     {
         surface->_unref();
     }
@@ -2689,7 +2821,16 @@ struct baton_guard
     bool released_;
 };
 
-
+/**
+ * Render this vector tile to a surface, like a {@link mapnik.Image}
+ *
+ * @memberof mapnik.VectorTile
+ * @name getData
+ * @instance
+ * @param {mapnik.Map} map object
+ * @param {mapnik.Image} renderable surface
+ * @param {Function} callback
+ */
 NAN_METHOD(VectorTile::render)
 {
     NanScope();
@@ -2830,6 +2971,7 @@ NAN_METHOD(VectorTile::render)
             }
         }
     }
+#if defined(GRID_RENDERER)
     else if (NanNew(Grid::constructor)->HasInstance(im_obj))
     {
         Grid *g = node::ObjectWrap::Unwrap<Grid>(im_obj);
@@ -2922,6 +3064,7 @@ NAN_METHOD(VectorTile::render)
         }
         closure->layer_idx = layer_idx;
     }
+#endif
     else
     {
         NanThrowTypeError("renderable mapnik object expected as second arg");
@@ -3013,6 +3156,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
         scale_denom *= closure->scale_factor;
         std::vector<mapnik::layer> const& layers = map_in.layers();
         vector_tile::Tile const& tiledata = closure->d->get_tile();
+#if defined(GRID_RENDERER)
         // render grid for layer
         if (closure->surface.is<Grid *>())
         {
@@ -3085,7 +3229,9 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
                 ren.end_map_processing(map_in);
             }
         }
-        else if (closure->surface.is<CairoSurface *>())
+        else
+#endif
+        if (closure->surface.is<CairoSurface *>())
         {
             CairoSurface * c = mapnik::util::get<CairoSurface *>(closure->surface);
             if (closure->use_cairo)
@@ -3173,11 +3319,13 @@ void VectorTile::EIO_AfterRenderTile(uv_work_t* req)
             Local<Value> argv[2] = { NanNull(), NanObjectWrapHandle(mapnik::util::get<Image *>(closure->surface)) };
             NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(closure->cb), 2, argv);
         }
+#if defined(GRID_RENDERER)
         else if (closure->surface.is<Grid *>())
         {
             Local<Value> argv[2] = { NanNull(), NanObjectWrapHandle(mapnik::util::get<Grid *>(closure->surface)) };
             NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(closure->cb), 2, argv);
         }
+#endif
         else if (closure->surface.is<CairoSurface *>())
         {
             Local<Value> argv[2] = { NanNull(), NanObjectWrapHandle(mapnik::util::get<CairoSurface *>(closure->surface)) };
@@ -3213,6 +3361,14 @@ typedef struct {
     Persistent<Function> cb;
 } clear_vector_tile_baton_t;
 
+/**
+ * Remove all data from this vector tile
+ *
+ * @memberof mapnik.VectorTile
+ * @name clear
+ * @instance
+ * @param {Function} callback
+ */
 NAN_METHOD(VectorTile::clear)
 {
     NanScope();
@@ -3270,6 +3426,14 @@ void VectorTile::EIO_AfterClear(uv_work_t* req)
     delete closure;
 }
 
+/**
+ * Test whether this tile is solid - whether it has features
+ *
+ * @memberof mapnik.VectorTile
+ * @name isSolidSync
+ * @instance
+ * @returns {boolean} whether the tile is solid
+ */
 NAN_METHOD(VectorTile::isSolidSync)
 {
     NanScope();
@@ -3311,6 +3475,14 @@ typedef struct {
     bool result;
 } is_solid_vector_tile_baton_t;
 
+/**
+ * Test whether this tile is solid - whether it has features
+ *
+ * @memberof mapnik.VectorTile
+ * @name isSolid
+ * @instance
+ * @param {Function} callback
+ */
 NAN_METHOD(VectorTile::isSolid)
 {
     NanScope();

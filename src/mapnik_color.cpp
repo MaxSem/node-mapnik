@@ -10,6 +10,22 @@
 
 Persistent<FunctionTemplate> Color::constructor;
 
+/**
+ * @name mapnik.Color
+ * @class
+ * @param {string|number} value either an array of [r, g, b, a],
+ * a color keyword, or a CSS color in rgba() form.
+ * @param {number} green
+ * @param {number} blue
+ * @param {number} blue
+ * @param {boolean} premultiplied
+ * @throws {TypeError} if a rgb component is outside of the 0-255 range
+ * @example
+ * var c = new mapnik.Color('green');
+ * var c = new mapnik.Color(0, 128, 0, 255);
+ * // premultiplied
+ * var c = new mapnik.Color(0, 128, 0, 255, true);
+ */
 void Color::Initialize(Handle<Object> target) {
 
     NanScope();
@@ -211,6 +227,15 @@ NAN_SETTER(Color::set_prop)
     }
 }
 
+
+/**
+ * Get whether this color is premultiplied
+ *
+ * @name get_premultiplied
+ * @memberof mapnik.Color
+ * @instance
+ * @returns {boolean} premultiplied
+ */
 NAN_GETTER(Color::get_premultiplied)
 {
     NanScope();
@@ -219,6 +244,18 @@ NAN_GETTER(Color::get_premultiplied)
     NanReturnUndefined();
 }
 
+/**
+ * Set whether this color should be premultiplied
+ *
+ * @name set_premultiplied
+ * @memberof mapnik.Color
+ * @instance
+ * @param {boolean} premultiplied
+ * @example
+ * var c = new mapnik.Color('green');
+ * c.set_premultiplied(true);
+ * @throws {TypeError} given a non-boolean argument
+ */
 NAN_SETTER(Color::set_premultiplied)
 {
     NanScope();
@@ -231,6 +268,18 @@ NAN_SETTER(Color::set_premultiplied)
     c->get()->set_premultiplied(value->BooleanValue());
 }
 
+/**
+ * Get this color's representation as a string
+ *
+ * @name toString
+ * @memberof mapnik.Color
+ * @instance
+ * @returns {string} color as a string
+ * @example
+ * var green = new mapnik.Color('green');
+ * green.toString()
+ * // 'rgb(0,128,0)'
+ */
 NAN_METHOD(Color::toString)
 {
     NanScope();
@@ -239,7 +288,18 @@ NAN_METHOD(Color::toString)
     NanReturnValue(NanNew(c->get()->to_string().c_str()));
 }
 
-
+/**
+ * Get this color represented as a hexademical string
+ *
+ * @name hex
+ * @memberof mapnik.Color
+ * @instance
+ * @returns {string} hex representation
+ * @example
+ * var c = new mapnik.Color('green');
+ * c.hex();
+ * // '#008000'
+ */
 NAN_METHOD(Color::hex)
 {
     NanScope();
