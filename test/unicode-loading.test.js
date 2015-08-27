@@ -174,7 +174,7 @@ describe('Handling unicode paths, filenames, and data', function(){
         done();
     });
 
-	it('open json with unicode name', function(done){
+    it('open json with unicode name', function(done){
         if (available_ds.indexOf('geojson') == -1) {
             console.log('skipping due to lack of geojson plugin');
             return done();
@@ -186,7 +186,7 @@ describe('Handling unicode paths, filenames, and data', function(){
         done();
     });
 
-	it('open sqlite with unicode name', function(done){
+    it('open sqlite with unicode name', function(done){
         if (available_ds.indexOf('sqlite') == -1) {
             console.log('skipping due to lack of sqlite plugin');
             return done();
